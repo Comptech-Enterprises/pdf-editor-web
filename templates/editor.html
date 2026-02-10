@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <link rel="stylesheet" href="/static/css/editor.css">
+    <style>
+        .editor-canvas-wrapper {
+            position: relative;
+            display: inline-block;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            background: white;
+        }
+        #pdf-canvas {
+            display: block;
+        }
+        .fabric-container {
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .fabric-container .canvas-container {
+            position: absolute !important;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <a href="/" class="btn btn-secondary">Back</a>
+                <span class="divider"></span>
+                <button id="add-text-btn" class="btn btn-primary">+ Add Text</button>
+            </div>
+            <div class="toolbar-center">
+                <button id="prev-page" class="btn btn-icon" disabled>&lt;</button>
+                <span id="page-info">Page 1 of 1</span>
+                <button id="next-page" class="btn btn-icon" disabled>&gt;</button>
+            </div>
+            <div class="toolbar-right">
+                <button id="save-btn" class="btn btn-success">Save & Download</button>
+            </div>
+        </div>
+
+        <!-- Main content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <h3>Properties</h3>
+                <div id="properties-panel" class="properties-panel">
+                    <p class="hint">Select text to edit properties</p>
+                </div>
+
+                <div id="text-properties" class="text-properties" style="display: none;">
+                    <div class="property-group">
+                        <label>Font Size</label>
+                        <input type="number" id="prop-font-size" value="12" min="6" max="72">
+                    </div>
+                    <div class="property-group">
+                        <label>Font</label>
+                        <select id="prop-font-family">
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Times-Roman">Times Roman</option>
+                            <option value="Courier">Courier</option>
+                        </select>
+                    </div>
+                    <div class="property-group">
+                        <label>Color</label>
+                        <input type="color" id="prop-color" value="#000000">
+                    </div>
+                    <button id="delete-text-btn" class="btn btn-danger">Delete</button>
+                </div>
+
+                <h3 style="margin-top: 20px;">Instructions</h3>
+                <ul class="instructions">
+                    <li>Click on text to select and edit</li>
+                    <li>Double-click to edit text content</li>
+                    <li>Drag to reposition</li>
+                    <li>Use "Add Text" to insert new text</li>
+                </ul>
+
+                <div id="debug-info" style="margin-top: 20px; font-size: 11px; color: #999;"></div>
+            </div>
+
+            <!-- Canvas area -->
+            <div class="pdf-canvas-container" id="pdf-canvas-container">
+                <div class="editor-canvas-wrapper" id="editor-canvas-wrapper">
+                    <canvas id="pdf-canvas"></canvas>
+                    <div class="fabric-container">
+                        <canvas id="fabric-canvas"></canvas>
+                    </div>
+                </div>
+                <div class="loading-overlay" id="loading-overlay">
+                    <div class="spinner"></div>
+                    <p>Loading PDF...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get file ID from URL
+        const fileId = "{{ file_id }}";
+
+        // PDF.js setup
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // State
+        let currentPage = 1;
+        let totalPages = 1;
+        let scale = 1.5;
+        let fabricCanvas = null;
+        let pageTextBlocks = {};
+        let originalTextBlocks = {};
+        let pageData = {};  // Store page dimensions
+
+        // DOM elements
+        const pdfCanvas = document.getElementById('pdf-canvas');
+        const canvasWrapper = document.getElementById('editor-canvas-wrapper');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const pageInfo = document.getElementById('page-info');
+        const prevBtn = document.getElementById('prev-page');
+        const nextBtn = document.getElementById('next-page');
+        const addTextBtn = document.getElementById('add-text-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const textProperties = document.getElementById('text-properties');
+        const propertiesPanel = document.getElementById('properties-panel');
+        const debugInfo = document.getElementById('debug-info');
+
+        // Initialize
+        async function init() {
+            try {
+                // Initialize Fabric.js canvas
+                fabricCanvas = new fabric.Canvas('fabric-canvas', {
+                    selection: true,
+                    preserveObjectStacking: true,
+                    backgroundColor: 'transparent'
+                });
+
+                // Load PDF data
+                await loadPDF();
+
+                // Setup event listeners
+                setupEventListeners();
+
+                console.log('Editor initialized successfully');
+            } catch (err) {
+                console.error('Init error:', err);
+                alert('Failed to initialize editor: ' + err.message);
+            }
+        }
+
+        async function loadPDF() {
+            try {
+                const response = await fetch(`/api/pdf/${fileId}/text`);
+                const data = await response.json();
+
+                console.log('PDF data loaded:', data);
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load PDF');
+                }
+
+                // Store text blocks and page data
+                data.pages.forEach(page => {
+                    pageTextBlocks[page.page] = page.textBlocks;
+                    originalTextBlocks[page.page] = JSON.parse(JSON.stringify(page.textBlocks));
+                    pageData[page.page] = {
+                        width: page.width,
+                        height: page.height
+                    };
+                });
+
+                totalPages = data.pages.length;
+
+                debugInfo.innerHTML = `Pages: ${totalPages}<br>Blocks on page 1: ${pageTextBlocks[1]?.length || 0}`;
+
+                // Render first page
+                await renderPage(currentPage);
+
+                updatePageInfo();
+                loadingOverlay.style.display = 'none';
+            } catch (err) {
+                console.error('Load PDF error:', err);
+                throw err;
+            }
+        }
+
+        async function renderPage(pageNum) {
+            loadingOverlay.style.display = 'flex';
+
+            try {
+                // Get page image
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = `/api/pdf/${fileId}/page/${pageNum}/image?scale=${scale}&t=${Date.now()}`;
+
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = () => reject(new Error('Failed to load page image'));
+                });
+
+                console.log(`Page ${pageNum} image loaded: ${img.width}x${img.height}`);
+
+                // Set canvas sizes
+                pdfCanvas.width = img.width;
+                pdfCanvas.height = img.height;
+
+                // Draw PDF to background canvas
+                const ctx = pdfCanvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+
+                // Resize Fabric canvas to match
+                fabricCanvas.setWidth(img.width);
+                fabricCanvas.setHeight(img.height);
+
+                // Clear existing objects
+                fabricCanvas.clear();
+
+                // Get page info
+                const pdfPageHeight = pageData[pageNum]?.height || img.height / scale;
+                const textBlocks = pageTextBlocks[pageNum] || [];
+
+                console.log(`Adding ${textBlocks.length} text blocks to page ${pageNum}`);
+
+                // Add text blocks
+                textBlocks.forEach((block, index) => {
+                    if (!block.deleted) {
+                        addTextToCanvas(block, pdfPageHeight, index);
+                    }
+                });
+
+                fabricCanvas.renderAll();
+
+                debugInfo.innerHTML = `Page: ${pageNum}/${totalPages}<br>Text blocks: ${textBlocks.length}<br>Canvas objects: ${fabricCanvas.getObjects().length}`;
+
+                loadingOverlay.style.display = 'none';
+            } catch (err) {
+                console.error('Render page error:', err);
+                loadingOverlay.style.display = 'none';
+                throw err;
+            }
+        }
+
+        function addTextToCanvas(block, pdfPageHeight, index) {
+            // PDF coordinates: origin at bottom-left, Y increases upward
+            // Canvas coordinates: origin at top-left, Y increases downward
+            // block.y = distance from bottom of page to bottom of text
+
+            const canvasX = block.x * scale;
+            // Convert: canvas_y = (pageHeight - pdf_y - height) * scale
+            const canvasY = (pdfPageHeight - block.y - block.height) * scale;
+
+            const textObj = new fabric.IText(block.text, {
+                left: canvasX,
+                top: canvasY,
+                fontSize: block.fontSize * scale,
+                fontFamily: mapFont(block.fontName),
+                fill: block.color || '#000000',
+                editable: true,
+                selectable: true,
+                hasControls: true,
+                hasBorders: true,
+                // Custom properties
+                blockId: block.id,
+                originalText: block.text,
+                originalX: block.x,
+                originalY: block.y,
+                originalWidth: block.width,
+                originalHeight: block.height,
+                originalBbox: block.originalBbox,
+                isExisting: true,
+                pdfFontSize: block.fontSize,
+                pdfFontName: block.fontName
+            });
+
+            fabricCanvas.add(textObj);
+        }
+
+        function mapFont(fontName) {
+            if (!fontName) return 'Arial';
+            const lower = fontName.toLowerCase();
+            if (lower.includes('times')) return 'Times New Roman';
+            if (lower.includes('courier') || lower.includes('mono')) return 'Courier New';
+            if (lower.includes('arial')) return 'Arial';
+            if (lower.includes('helvetica')) return 'Helvetica, Arial, sans-serif';
+            return 'Arial';
+        }
+
+        function setupEventListeners() {
+            // Page navigation
+            prevBtn.addEventListener('click', async () => {
+                if (currentPage > 1) {
+                    saveCurrentPageState();
+                    currentPage--;
+                    await renderPage(currentPage);
+                    updatePageInfo();
+                }
+            });
+
+            nextBtn.addEventListener('click', async () => {
+                if (currentPage < totalPages) {
+                    saveCurrentPageState();
+                    currentPage++;
+                    await renderPage(currentPage);
+                    updatePageInfo();
+                }
+            });
+
+            // Add text button
+            addTextBtn.addEventListener('click', () => {
+                const pdfPageHeight = pageData[currentPage]?.height || 792;
+                const newBlock = {
+                    id: 'new-' + Date.now(),
+                    text: 'New Text',
+                    x: 100,
+                    y: pdfPageHeight - 200,
+                    width: 100,
+                    height: 14,
+                    fontSize: 14,
+                    fontName: 'Helvetica',
+                    color: '#000000'
+                };
+
+                if (!pageTextBlocks[currentPage]) {
+                    pageTextBlocks[currentPage] = [];
+                }
+                pageTextBlocks[currentPage].push(newBlock);
+
+                const textObj = new fabric.IText('New Text', {
+                    left: 100 * scale,
+                    top: 200 * scale,
+                    fontSize: 14 * scale,
+                    fontFamily: 'Arial',
+                    fill: '#000000',
+                    editable: true,
+                    blockId: newBlock.id,
+                    isExisting: false,
+                    pdfFontSize: 14,
+                    pdfFontName: 'Helvetica'
+                });
+
+                fabricCanvas.add(textObj);
+                fabricCanvas.setActiveObject(textObj);
+                fabricCanvas.renderAll();
+            });
+
+            // Selection events
+            fabricCanvas.on('selection:created', updatePropertiesPanel);
+            fabricCanvas.on('selection:updated', updatePropertiesPanel);
+            fabricCanvas.on('selection:cleared', () => {
+                textProperties.style.display = 'none';
+                propertiesPanel.querySelector('.hint').style.display = 'block';
+            });
+
+            // Property changes
+            document.getElementById('prop-font-size').addEventListener('change', (e) => {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj) {
+                    obj.set('fontSize', parseInt(e.target.value) * scale);
+                    obj.pdfFontSize = parseInt(e.target.value);
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            document.getElementById('prop-font-family').addEventListener('change', (e) => {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj) {
+                    obj.set('fontFamily', mapFont(e.target.value));
+                    obj.pdfFontName = e.target.value;
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            document.getElementById('prop-color').addEventListener('change', (e) => {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj) {
+                    obj.set('fill', e.target.value);
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            // Delete button
+            document.getElementById('delete-text-btn').addEventListener('click', () => {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj) {
+                    const blocks = pageTextBlocks[currentPage] || [];
+                    const blockIndex = blocks.findIndex(b => b.id === obj.blockId);
+                    if (blockIndex >= 0) {
+                        blocks[blockIndex].deleted = true;
+                    }
+                    fabricCanvas.remove(obj);
+                    textProperties.style.display = 'none';
+                    propertiesPanel.querySelector('.hint').style.display = 'block';
+                }
+            });
+
+            // Save button
+            saveBtn.addEventListener('click', saveAndDownload);
+        }
+
+        function updatePropertiesPanel() {
+            const obj = fabricCanvas.getActiveObject();
+            if (obj && obj.type === 'i-text') {
+                textProperties.style.display = 'block';
+                propertiesPanel.querySelector('.hint').style.display = 'none';
+
+                document.getElementById('prop-font-size').value = obj.pdfFontSize || Math.round(obj.fontSize / scale);
+                document.getElementById('prop-font-family').value = obj.pdfFontName || 'Helvetica';
+                document.getElementById('prop-color').value = obj.fill || '#000000';
+            }
+        }
+
+        function updatePageInfo() {
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            prevBtn.disabled = currentPage <= 1;
+            nextBtn.disabled = currentPage >= totalPages;
+        }
+
+        function saveCurrentPageState() {
+            const objects = fabricCanvas.getObjects('i-text');
+            const pdfPageHeight = pageData[currentPage]?.height || 792;
+
+            objects.forEach(obj => {
+                const blocks = pageTextBlocks[currentPage] || [];
+                const block = blocks.find(b => b.id === obj.blockId);
+
+                if (block) {
+                    block.text = obj.text;
+                    block.x = obj.left / scale;
+                    block.y = pdfPageHeight - (obj.top / scale) - (obj.getScaledHeight() / scale);
+                    block.fontSize = obj.pdfFontSize || Math.round(obj.fontSize / scale);
+                    block.fontName = obj.pdfFontName || 'Helvetica';
+                    block.color = obj.fill;
+                }
+            });
+        }
+
+        async function saveAndDownload() {
+            saveCurrentPageState();
+
+            const operations = [];
+
+            for (const [pageNum, blocks] of Object.entries(pageTextBlocks)) {
+                const originalBlocks = originalTextBlocks[pageNum] || [];
+
+                blocks.forEach(block => {
+                    const original = originalBlocks.find(b => b.id === block.id);
+
+                    if (block.deleted) {
+                        if (original) {
+                            operations.push({
+                                type: 'delete',
+                                page: parseInt(pageNum),
+                                blockId: block.id,
+                                originalX: original.x,
+                                originalY: original.y,
+                                originalWidth: original.width,
+                                originalHeight: original.height,
+                                originalBbox: original.originalBbox
+                            });
+                        }
+                    } else if (!block.id.startsWith('new-')) {
+                        if (original && (
+                            block.text !== original.text ||
+                            Math.abs(block.x - original.x) > 1 ||
+                            Math.abs(block.y - original.y) > 1
+                        )) {
+                            operations.push({
+                                type: 'modify',
+                                page: parseInt(pageNum),
+                                blockId: block.id,
+                                originalX: original.x,
+                                originalY: original.y,
+                                originalWidth: original.width,
+                                originalHeight: original.height,
+                                originalBbox: original.originalBbox,
+                                newText: block.text,
+                                x: block.x,
+                                y: block.y,
+                                fontSize: block.fontSize,
+                                fontName: block.fontName,
+                                color: block.color
+                            });
+                        }
+                    } else {
+                        operations.push({
+                            type: 'add',
+                            page: parseInt(pageNum),
+                            text: block.text,
+                            x: block.x,
+                            y: block.y,
+                            fontSize: block.fontSize,
+                            fontName: block.fontName,
+                            color: block.color
+                        });
+                    }
+                });
+            }
+
+            if (operations.length === 0) {
+                alert('No changes to save');
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
+            try {
+                const response = await fetch(`/api/pdf/${fileId}/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ operations })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.location.href = data.downloadUrl;
+                } else {
+                    alert('Save failed: ' + data.error);
+                }
+            } catch (err) {
+                alert('Save failed: ' + err.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save & Download';
+            }
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
