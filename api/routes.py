@@ -138,3 +138,75 @@ def delete_pdf(file_id):
     if storage.delete_upload(file_id):
         return jsonify({"success": True})
     return jsonify({"error": "PDF not found"}), 404
+
+
+@api.route('/pdf/<file_id>/preview', methods=['POST'])
+def generate_preview(file_id):
+    """Generate a preview PDF with applied edits."""
+    storage = get_storage()
+    pdf_path = storage.get_original_path(file_id)
+
+    if not pdf_path or not os.path.exists(pdf_path):
+        return jsonify({"error": "PDF not found"}), 404
+
+    data = request.get_json()
+    if not data or 'operations' not in data:
+        return jsonify({"error": "No operations provided"}), 400
+
+    operations = data['operations']
+
+    # Create preview output path
+    upload_dir = storage.get_upload_dir(file_id)
+    preview_path = upload_dir / "preview.pdf"
+
+    try:
+        PDFService.apply_edits(pdf_path, operations, str(preview_path))
+
+        # Get page count from preview
+        pdf_info = PDFService.get_pdf_info(str(preview_path))
+
+        return jsonify({
+            "success": True,
+            "pages": pdf_info['pages']
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route('/pdf/<file_id>/preview/page/<int:page_num>/image', methods=['GET'])
+def get_preview_page_image(file_id, page_num):
+    """Get preview PDF page as PNG image."""
+    storage = get_storage()
+    upload_dir = storage.get_upload_dir(file_id)
+    preview_path = upload_dir / "preview.pdf"
+
+    if not preview_path.exists():
+        return jsonify({"error": "Preview not found"}), 404
+
+    scale = float(request.args.get('scale', 1.5))
+    # For preview, show text (hide_text=False) since we want to display the final result
+    img_bytes = PDFService.render_page_to_image(str(preview_path), page_num, scale, hide_text=False)
+
+    if not img_bytes:
+        return jsonify({"error": "Page not found"}), 404
+
+    from io import BytesIO
+    return send_file(
+        BytesIO(img_bytes),
+        mimetype='image/png',
+        download_name=f'preview_page_{page_num}.png'
+    )
+
+
+@api.route('/pdf/<file_id>/preview', methods=['DELETE'])
+def delete_preview(file_id):
+    """Delete the preview PDF."""
+    storage = get_storage()
+    upload_dir = storage.get_upload_dir(file_id)
+    preview_path = upload_dir / "preview.pdf"
+
+    if preview_path.exists():
+        os.remove(preview_path)
+        return jsonify({"success": True})
+
+    return jsonify({"success": True})  # Not an error if preview doesn't exist
