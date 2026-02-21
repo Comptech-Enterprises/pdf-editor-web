@@ -29,6 +29,197 @@
             top: 0;
             left: 0;
         }
+
+        /* Preview Modal Styles */
+        .preview-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        .preview-modal.active {
+            display: flex;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: #1a1a2e;
+            border-bottom: 1px solid #333;
+        }
+
+        .preview-header h2 {
+            color: #fff;
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .preview-header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .preview-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .preview-thumbnails {
+            width: 140px;
+            background: #16213e;
+            padding: 10px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+        }
+
+        .preview-thumbnail {
+            width: 100%;
+            padding: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            background: #fff;
+            transition: border-color 0.2s;
+        }
+
+        .preview-thumbnail:hover {
+            border-color: #4a90d9;
+        }
+
+        .preview-thumbnail.active {
+            border-color: #2196F3;
+        }
+
+        .preview-thumbnail img {
+            width: 100%;
+            display: block;
+        }
+
+        .preview-thumbnail-label {
+            text-align: center;
+            color: #aaa;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        .preview-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow: auto;
+        }
+
+        .preview-image-container {
+            max-width: 100%;
+            max-height: calc(100vh - 160px);
+            overflow: auto;
+            background: #fff;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .preview-image-container img {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .preview-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .preview-nav button {
+            background: #2196F3;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .preview-nav button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .preview-nav span {
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .preview-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .preview-loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #333;
+            border-top-color: #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Image Properties Panel */
+        #image-properties {
+            margin-top: 10px;
+        }
+
+        #image-properties .property-group {
+            margin-bottom: 10px;
+        }
+
+        #image-properties label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        #image-properties input[type="number"] {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .lock-ratio-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .lock-ratio-group input[type="checkbox"] {
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -39,6 +230,8 @@
                 <a href="/" class="btn btn-secondary">Back</a>
                 <span class="divider"></span>
                 <button id="add-text-btn" class="btn btn-primary">+ Add Text</button>
+                <button id="add-image-btn" class="btn btn-primary">+ Add Image</button>
+                <input type="file" id="image-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
             </div>
             <div class="toolbar-center">
                 <button id="prev-page" class="btn btn-icon" disabled>&lt;</button>
@@ -46,7 +239,7 @@
                 <button id="next-page" class="btn btn-icon" disabled>&gt;</button>
             </div>
             <div class="toolbar-right">
-                <button id="save-btn" class="btn btn-success">Save & Download</button>
+                <button id="preview-btn" class="btn btn-success">Preview</button>
             </div>
         </div>
 
@@ -79,12 +272,30 @@
                     <button id="delete-text-btn" class="btn btn-danger">Delete</button>
                 </div>
 
+                <div id="image-properties" style="display: none;">
+                    <div class="property-group">
+                        <label>Width</label>
+                        <input type="number" id="prop-img-width" min="10" max="2000">
+                    </div>
+                    <div class="property-group">
+                        <label>Height</label>
+                        <input type="number" id="prop-img-height" min="10" max="2000">
+                    </div>
+                    <div class="lock-ratio-group">
+                        <input type="checkbox" id="prop-img-lock-ratio" checked>
+                        <label for="prop-img-lock-ratio" style="display: inline; margin: 0;">Lock aspect ratio</label>
+                    </div>
+                    <button id="delete-image-btn" class="btn btn-danger">Delete Image</button>
+                </div>
+
                 <h3 style="margin-top: 20px;">Instructions</h3>
                 <ul class="instructions">
                     <li>Click on text to select and edit</li>
                     <li>Double-click to edit text content</li>
                     <li>Drag to reposition</li>
                     <li>Use "Add Text" to insert new text</li>
+                    <li>Use "Add Image" to insert stamps, logos, or signatures</li>
+                    <li>Resize images by dragging corners</li>
                 </ul>
 
                 <div id="debug-info" style="margin-top: 20px; font-size: 11px; color: #999;"></div>
@@ -106,6 +317,34 @@
         </div>
     </div>
 
+    <!-- Preview Modal -->
+    <div class="preview-modal" id="preview-modal">
+        <div class="preview-header">
+            <h2>Preview Edited PDF</h2>
+            <div class="preview-header-buttons">
+                <button id="preview-back-btn" class="btn btn-secondary">Back to Edit</button>
+                <button id="preview-download-btn" class="btn btn-success">Download PDF</button>
+            </div>
+        </div>
+        <div class="preview-body">
+            <div class="preview-thumbnails" id="preview-thumbnails"></div>
+            <div class="preview-main">
+                <div class="preview-loading" id="preview-loading">
+                    <div class="spinner"></div>
+                    <p>Generating preview...</p>
+                </div>
+                <div class="preview-image-container" id="preview-image-container" style="display: none;">
+                    <img id="preview-image" src="" alt="Preview">
+                </div>
+                <div class="preview-nav" id="preview-nav" style="display: none;">
+                    <button id="preview-prev">&lt; Prev</button>
+                    <span id="preview-page-info">Page 1 of 1</span>
+                    <button id="preview-next">Next &gt;</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Get file ID from URL
         const fileId = "{{ file_id }}";
@@ -120,6 +359,7 @@
         let fabricCanvas = null;
         let pageTextBlocks = {};
         let originalTextBlocks = {};
+        let pageImageBlocks = {};  // Store image blocks per page
         let pageData = {};  // Store page dimensions
 
         // DOM elements
@@ -130,8 +370,29 @@
         const prevBtn = document.getElementById('prev-page');
         const nextBtn = document.getElementById('next-page');
         const addTextBtn = document.getElementById('add-text-btn');
-        const saveBtn = document.getElementById('save-btn');
+        const addImageBtn = document.getElementById('add-image-btn');
+        const imageInput = document.getElementById('image-input');
+        const previewBtn = document.getElementById('preview-btn');
         const textProperties = document.getElementById('text-properties');
+        const imageProperties = document.getElementById('image-properties');
+
+        // Preview modal elements
+        const previewModal = document.getElementById('preview-modal');
+        const previewLoading = document.getElementById('preview-loading');
+        const previewImageContainer = document.getElementById('preview-image-container');
+        const previewImage = document.getElementById('preview-image');
+        const previewThumbnails = document.getElementById('preview-thumbnails');
+        const previewNav = document.getElementById('preview-nav');
+        const previewPageInfo = document.getElementById('preview-page-info');
+        const previewPrev = document.getElementById('preview-prev');
+        const previewNext = document.getElementById('preview-next');
+        const previewBackBtn = document.getElementById('preview-back-btn');
+        const previewDownloadBtn = document.getElementById('preview-download-btn');
+
+        // Preview state
+        let previewCurrentPage = 1;
+        let previewTotalPages = 1;
+        let currentOperations = [];
         const propertiesPanel = document.getElementById('properties-panel');
         const debugInfo = document.getElementById('debug-info');
 
@@ -238,9 +499,17 @@
                     }
                 });
 
+                // Add image blocks
+                const imageBlocks = pageImageBlocks[pageNum] || [];
+                imageBlocks.forEach((block, index) => {
+                    if (!block.deleted) {
+                        addImageToCanvas(block, pdfPageHeight, index);
+                    }
+                });
+
                 fabricCanvas.renderAll();
 
-                debugInfo.innerHTML = `Page: ${pageNum}/${totalPages}<br>Text blocks: ${textBlocks.length}<br>Canvas objects: ${fabricCanvas.getObjects().length}`;
+                debugInfo.innerHTML = `Page: ${pageNum}/${totalPages}<br>Text blocks: ${textBlocks.length}<br>Image blocks: ${imageBlocks.length}<br>Canvas objects: ${fabricCanvas.getObjects().length}`;
 
                 loadingOverlay.style.display = 'none';
             } catch (err) {
@@ -293,6 +562,89 @@
             if (lower.includes('arial')) return 'Arial';
             if (lower.includes('helvetica')) return 'Helvetica, Arial, sans-serif';
             return 'Arial';
+        }
+
+        function addImageToCanvas(block, pdfPageHeight, index) {
+            // Convert PDF coordinates to canvas coordinates
+            const canvasX = block.x * scale;
+            const canvasY = (pdfPageHeight - block.y - block.height) * scale;
+            const canvasWidth = block.width * scale;
+            const canvasHeight = block.height * scale;
+
+            fabric.Image.fromURL(block.imageDataUrl, function(img) {
+                img.set({
+                    left: canvasX,
+                    top: canvasY,
+                    scaleX: canvasWidth / img.width,
+                    scaleY: canvasHeight / img.height,
+                    selectable: true,
+                    hasControls: true,
+                    hasBorders: true,
+                    // Custom properties
+                    blockId: block.id,
+                    isImage: true,
+                    imageDataUrl: block.imageDataUrl,
+                    aspectRatio: block.aspectRatio || (img.width / img.height)
+                });
+                fabricCanvas.add(img);
+                fabricCanvas.renderAll();
+                // Update debug info after async image load
+                updateDebugInfo();
+            });
+        }
+
+        function handleImageUpload(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                alert('Please select a valid image file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imageDataUrl = e.target.result;
+
+                // Create a temporary image to get dimensions
+                const tempImg = new Image();
+                tempImg.onload = function() {
+                    const pdfPageHeight = pageData[currentPage]?.height || 792;
+                    const pdfPageWidth = pageData[currentPage]?.width || 612;
+
+                    // Scale down if image is larger than page
+                    let imgWidth = tempImg.width;
+                    let imgHeight = tempImg.height;
+                    const maxWidth = pdfPageWidth * 0.5;  // Max 50% of page width
+                    const maxHeight = pdfPageHeight * 0.5;  // Max 50% of page height
+
+                    if (imgWidth > maxWidth || imgHeight > maxHeight) {
+                        const ratio = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+                        imgWidth *= ratio;
+                        imgHeight *= ratio;
+                    }
+
+                    const newBlock = {
+                        id: 'img-' + Date.now(),
+                        x: 100,
+                        y: pdfPageHeight - 200 - imgHeight,  // PDF coordinates
+                        width: imgWidth,
+                        height: imgHeight,
+                        imageDataUrl: imageDataUrl,
+                        aspectRatio: tempImg.width / tempImg.height
+                    };
+
+                    if (!pageImageBlocks[currentPage]) {
+                        pageImageBlocks[currentPage] = [];
+                    }
+                    pageImageBlocks[currentPage].push(newBlock);
+
+                    // Add to canvas
+                    addImageToCanvas(newBlock, pdfPageHeight, pageImageBlocks[currentPage].length - 1);
+
+                    // Update debug info
+                    updateDebugInfo();
+                };
+                tempImg.src = imageDataUrl;
+            };
+            reader.readAsDataURL(file);
         }
 
         function setupEventListeners() {
@@ -358,6 +710,7 @@
             fabricCanvas.on('selection:updated', updatePropertiesPanel);
             fabricCanvas.on('selection:cleared', () => {
                 textProperties.style.display = 'none';
+                imageProperties.style.display = 'none';
                 propertiesPanel.querySelector('.hint').style.display = 'block';
             });
 
@@ -403,19 +756,117 @@
                 }
             });
 
-            // Save button
-            saveBtn.addEventListener('click', saveAndDownload);
+            // Add image button
+            addImageBtn.addEventListener('click', () => {
+                imageInput.click();
+            });
+
+            imageInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    handleImageUpload(e.target.files[0]);
+                    e.target.value = '';  // Reset input for future uploads
+                }
+            });
+
+            // Image property changes
+            document.getElementById('prop-img-width').addEventListener('change', (e) => {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj && obj.isImage) {
+                    const newWidth = parseInt(e.target.value);
+                    const lockRatio = document.getElementById('prop-img-lock-ratio').checked;
+
+                    if (lockRatio && obj.aspectRatio) {
+                        const newHeight = newWidth / obj.aspectRatio;
+                        obj.scaleX = (newWidth * scale) / obj.width;
+                        obj.scaleY = (newHeight * scale) / obj.height;
+                        document.getElementById('prop-img-height').value = Math.round(newHeight);
+                    } else {
+                        obj.scaleX = (newWidth * scale) / obj.width;
+                    }
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            document.getElementById('prop-img-height').addEventListener('change', (e) => {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj && obj.isImage) {
+                    const newHeight = parseInt(e.target.value);
+                    const lockRatio = document.getElementById('prop-img-lock-ratio').checked;
+
+                    if (lockRatio && obj.aspectRatio) {
+                        const newWidth = newHeight * obj.aspectRatio;
+                        obj.scaleX = (newWidth * scale) / obj.width;
+                        obj.scaleY = (newHeight * scale) / obj.height;
+                        document.getElementById('prop-img-width').value = Math.round(newWidth);
+                    } else {
+                        obj.scaleY = (newHeight * scale) / obj.height;
+                    }
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            // Delete image button
+            document.getElementById('delete-image-btn').addEventListener('click', () => {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj && obj.isImage) {
+                    const blocks = pageImageBlocks[currentPage] || [];
+                    const blockIndex = blocks.findIndex(b => b.id === obj.blockId);
+                    if (blockIndex >= 0) {
+                        blocks[blockIndex].deleted = true;
+                    }
+                    fabricCanvas.remove(obj);
+                    imageProperties.style.display = 'none';
+                    propertiesPanel.querySelector('.hint').style.display = 'block';
+                }
+            });
+
+            // Preview button
+            previewBtn.addEventListener('click', openPreview);
+
+            // Preview modal events
+            previewBackBtn.addEventListener('click', closePreview);
+            previewDownloadBtn.addEventListener('click', downloadPDF);
+            previewPrev.addEventListener('click', () => {
+                if (previewCurrentPage > 1) {
+                    previewCurrentPage--;
+                    loadPreviewPage(previewCurrentPage);
+                    updatePreviewNav();
+                }
+            });
+            previewNext.addEventListener('click', () => {
+                if (previewCurrentPage < previewTotalPages) {
+                    previewCurrentPage++;
+                    loadPreviewPage(previewCurrentPage);
+                    updatePreviewNav();
+                }
+            });
         }
 
         function updatePropertiesPanel() {
             const obj = fabricCanvas.getActiveObject();
             if (obj && obj.type === 'i-text') {
                 textProperties.style.display = 'block';
+                imageProperties.style.display = 'none';
                 propertiesPanel.querySelector('.hint').style.display = 'none';
 
                 document.getElementById('prop-font-size').value = obj.pdfFontSize || Math.round(obj.fontSize / scale);
                 document.getElementById('prop-font-family').value = obj.pdfFontName || 'Helvetica';
                 document.getElementById('prop-color').value = obj.fill || '#000000';
+            } else if (obj && obj.isImage) {
+                textProperties.style.display = 'none';
+                imageProperties.style.display = 'block';
+                propertiesPanel.querySelector('.hint').style.display = 'none';
+
+                // Calculate PDF dimensions from canvas dimensions
+                const pdfWidth = (obj.width * obj.scaleX) / scale;
+                const pdfHeight = (obj.height * obj.scaleY) / scale;
+
+                document.getElementById('prop-img-width').value = Math.round(pdfWidth);
+                document.getElementById('prop-img-height').value = Math.round(pdfHeight);
+            } else {
+                textProperties.style.display = 'none';
+                imageProperties.style.display = 'none';
+                propertiesPanel.querySelector('.hint').style.display = 'block';
             }
         }
 
@@ -425,11 +876,18 @@
             nextBtn.disabled = currentPage >= totalPages;
         }
 
+        function updateDebugInfo() {
+            const textBlocks = pageTextBlocks[currentPage] || [];
+            const imageBlocks = pageImageBlocks[currentPage] || [];
+            debugInfo.innerHTML = `Page: ${currentPage}/${totalPages}<br>Text blocks: ${textBlocks.length}<br>Image blocks: ${imageBlocks.length}<br>Canvas objects: ${fabricCanvas.getObjects().length}`;
+        }
+
         function saveCurrentPageState() {
-            const objects = fabricCanvas.getObjects('i-text');
             const pdfPageHeight = pageData[currentPage]?.height || 792;
 
-            objects.forEach(obj => {
+            // Save text blocks
+            const textObjects = fabricCanvas.getObjects('i-text');
+            textObjects.forEach(obj => {
                 const blocks = pageTextBlocks[currentPage] || [];
                 const block = blocks.find(b => b.id === obj.blockId);
 
@@ -442,13 +900,32 @@
                     block.color = obj.fill;
                 }
             });
+
+            // Save image blocks
+            const imageObjects = fabricCanvas.getObjects('image');
+            imageObjects.forEach(obj => {
+                if (!obj.isImage) return;
+                const blocks = pageImageBlocks[currentPage] || [];
+                const block = blocks.find(b => b.id === obj.blockId);
+
+                if (block) {
+                    const scaledWidth = obj.width * obj.scaleX;
+                    const scaledHeight = obj.height * obj.scaleY;
+
+                    block.x = obj.left / scale;
+                    block.y = pdfPageHeight - (obj.top / scale) - (scaledHeight / scale);
+                    block.width = scaledWidth / scale;
+                    block.height = scaledHeight / scale;
+                }
+            });
         }
 
-        async function saveAndDownload() {
+        function buildOperations() {
             saveCurrentPageState();
 
             const operations = [];
 
+            // Process text blocks
             for (const [pageNum, blocks] of Object.entries(pageTextBlocks)) {
                 const originalBlocks = originalTextBlocks[pageNum] || [];
 
@@ -506,33 +983,149 @@
                 });
             }
 
-            if (operations.length === 0) {
-                alert('No changes to save');
+            // Process image blocks
+            for (const [pageNum, blocks] of Object.entries(pageImageBlocks)) {
+                blocks.forEach(block => {
+                    if (block.deleted) return;
+
+                    // Extract base64 data from data URL (remove "data:image/...;base64," prefix)
+                    const imageDataUrl = block.imageDataUrl;
+                    const base64Data = imageDataUrl.split(',')[1];
+
+                    operations.push({
+                        type: 'add_image',
+                        page: parseInt(pageNum),
+                        x: block.x,
+                        y: block.y,
+                        width: block.width,
+                        height: block.height,
+                        imageData: base64Data
+                    });
+                });
+            }
+
+            return operations;
+        }
+
+        async function openPreview() {
+            currentOperations = buildOperations();
+
+            if (currentOperations.length === 0) {
+                alert('No changes to preview');
                 return;
             }
 
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
+            // Show modal with loading state
+            previewModal.classList.add('active');
+            previewLoading.style.display = 'flex';
+            previewImageContainer.style.display = 'none';
+            previewNav.style.display = 'none';
+            previewThumbnails.innerHTML = '';
 
             try {
+                // Generate preview PDF
+                const response = await fetch(`/api/pdf/${fileId}/preview`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ operations: currentOperations })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to generate preview');
+                }
+
+                previewTotalPages = data.pages;
+                previewCurrentPage = 1;
+
+                // Load thumbnails
+                await loadPreviewThumbnails();
+
+                // Load first page
+                await loadPreviewPage(1);
+
+                // Show preview UI
+                previewLoading.style.display = 'none';
+                previewImageContainer.style.display = 'block';
+                previewNav.style.display = 'flex';
+                updatePreviewNav();
+
+            } catch (err) {
+                console.error('Preview error:', err);
+                alert('Failed to generate preview: ' + err.message);
+                closePreview();
+            }
+        }
+
+        async function loadPreviewThumbnails() {
+            previewThumbnails.innerHTML = '';
+
+            for (let i = 1; i <= previewTotalPages; i++) {
+                const thumb = document.createElement('div');
+                thumb.className = 'preview-thumbnail' + (i === 1 ? ' active' : '');
+                thumb.innerHTML = `
+                    <img src="/api/pdf/${fileId}/preview/page/${i}/image?scale=0.3&t=${Date.now()}" alt="Page ${i}">
+                    <div class="preview-thumbnail-label">Page ${i}</div>
+                `;
+                thumb.addEventListener('click', () => {
+                    previewCurrentPage = i;
+                    loadPreviewPage(i);
+                    updatePreviewNav();
+                });
+                previewThumbnails.appendChild(thumb);
+            }
+        }
+
+        async function loadPreviewPage(pageNum) {
+            previewImage.src = `/api/pdf/${fileId}/preview/page/${pageNum}/image?scale=1.5&t=${Date.now()}`;
+
+            // Update thumbnail active state
+            const thumbs = previewThumbnails.querySelectorAll('.preview-thumbnail');
+            thumbs.forEach((thumb, index) => {
+                thumb.classList.toggle('active', index + 1 === pageNum);
+            });
+        }
+
+        function updatePreviewNav() {
+            previewPageInfo.textContent = `Page ${previewCurrentPage} of ${previewTotalPages}`;
+            previewPrev.disabled = previewCurrentPage <= 1;
+            previewNext.disabled = previewCurrentPage >= previewTotalPages;
+        }
+
+        function closePreview() {
+            previewModal.classList.remove('active');
+
+            // Cleanup preview file
+            fetch(`/api/pdf/${fileId}/preview`, { method: 'DELETE' }).catch(() => {});
+        }
+
+        async function downloadPDF() {
+            previewDownloadBtn.disabled = true;
+            previewDownloadBtn.textContent = 'Preparing...';
+
+            try {
+                // Apply edits to create final PDF
                 const response = await fetch(`/api/pdf/${fileId}/edit`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ operations })
+                    body: JSON.stringify({ operations: currentOperations })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
+                    // Close modal and trigger download
+                    closePreview();
                     window.location.href = data.downloadUrl;
                 } else {
-                    alert('Save failed: ' + data.error);
+                    alert('Download failed: ' + data.error);
                 }
             } catch (err) {
-                alert('Save failed: ' + err.message);
+                alert('Download failed: ' + err.message);
             } finally {
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save & Download';
+                previewDownloadBtn.disabled = false;
+                previewDownloadBtn.textContent = 'Download PDF';
             }
         }
 

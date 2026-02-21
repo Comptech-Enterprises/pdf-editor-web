@@ -1,4 +1,5 @@
 import uuid
+import base64
 import fitz  # PyMuPDF
 from pathlib import Path
 
@@ -134,6 +135,37 @@ class PDFService:
                         color=color
                     )
 
+            # Third pass: add images
+            for op in page_ops:
+                if op['type'] == 'add_image':
+                    x = op.get('x', 0)
+                    y = op.get('y', 0)
+                    width = op.get('width', 100)
+                    height = op.get('height', 100)
+
+                    # Ensure coordinates are valid numbers
+                    x = float(x) if x is not None else 0
+                    y = float(y) if y is not None else 0
+                    width = float(width) if width is not None else 100
+                    height = float(height) if height is not None else 100
+
+                    # Convert PDF coords (bottom-left origin) to fitz coords (top-left origin)
+                    # PDF y = distance from bottom of page to bottom of image
+                    # Fitz y = distance from top of page to top of image
+                    fitz_y = page_height - y - height
+
+                    # Clamp coordinates to page bounds
+                    x = max(0, min(x, page.rect.width - width))
+                    fitz_y = max(0, min(fitz_y, page_height - height))
+
+                    rect = fitz.Rect(x, fitz_y, x + width, fitz_y + height)
+
+                    # Decode base64 image data
+                    image_data = base64.b64decode(op['imageData'])
+
+                    # Insert image
+                    page.insert_image(rect, stream=image_data)
+
         doc.save(output_path)
         doc.close()
         return output_path
@@ -153,7 +185,8 @@ class PDFService:
             doc = fitz.open(pdf_path)
             page = doc[page_num - 1]
 
-            # Redact all text areas with white to hide original text
+            # Redact all text areas - remove text without filling
+            # This preserves background colors (important for dark headers with white text)
             text_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
             for block in text_dict.get("blocks", []):
                 if block.get("type") != 0:  # Skip non-text blocks
@@ -165,7 +198,8 @@ class PDFService:
                             rect = fitz.Rect(bbox)
                             # Expand slightly to fully cover
                             rect = rect + (-1, -1, 1, 1)
-                            page.add_redact_annot(rect, fill=(1, 1, 1))
+                            # Use no fill to preserve background
+                            page.add_redact_annot(rect, fill=False)
             page.apply_redactions()
 
             mat = fitz.Matrix(scale, scale)
@@ -184,13 +218,30 @@ class PDFService:
 
     @staticmethod
     def _color_to_hex(color):
-        """Convert PyMuPDF color int to hex string."""
+        """Convert PyMuPDF color to hex string."""
+        if color is None:
+            return "#000000"
+
         if isinstance(color, int):
-            # Color is stored as integer
+            # Color is stored as integer (common in PyMuPDF)
             r = (color >> 16) & 0xFF
             g = (color >> 8) & 0xFF
             b = color & 0xFF
             return f"#{r:02x}{g:02x}{b:02x}"
+
+        if isinstance(color, (list, tuple)):
+            # RGB tuple (values 0-1)
+            if len(color) >= 3:
+                r = int(color[0] * 255) if color[0] <= 1 else int(color[0])
+                g = int(color[1] * 255) if color[1] <= 1 else int(color[1])
+                b = int(color[2] * 255) if color[2] <= 1 else int(color[2])
+                return f"#{r:02x}{g:02x}{b:02x}"
+
+        if isinstance(color, float):
+            # Grayscale (0-1)
+            gray = int(color * 255) if color <= 1 else int(color)
+            return f"#{gray:02x}{gray:02x}{gray:02x}"
+
         return "#000000"
 
     @staticmethod
