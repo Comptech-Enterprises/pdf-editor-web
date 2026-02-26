@@ -220,6 +220,197 @@
         .lock-ratio-group input[type="checkbox"] {
             margin: 0;
         }
+
+        /* Signature Modal Styles */
+        .signature-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .signature-modal.active {
+            display: flex;
+        }
+
+        .signature-modal-content {
+            background: #fff;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .signature-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .signature-modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .signature-close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .signature-close-btn:hover {
+            color: #ff6b6b;
+        }
+
+        .signature-tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .signature-tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: #f5f5f5;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .signature-tab-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .signature-tab-btn.active {
+            background: #fff;
+            border-bottom: 2px solid #2196F3;
+            font-weight: bold;
+        }
+
+        .signature-tab-content {
+            padding: 20px;
+        }
+
+        .signature-tab-panel {
+            display: none;
+        }
+
+        .signature-tab-panel.active {
+            display: block;
+        }
+
+        #signature-canvas {
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            background: #fff;
+            cursor: crosshair;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .signature-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        .signature-upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .signature-upload-area input[type="file"] {
+            margin-bottom: 10px;
+        }
+
+        .signature-upload-area p {
+            margin: 0;
+            color: #666;
+            font-size: 13px;
+        }
+
+        #signature-preview {
+            text-align: center;
+        }
+
+        #signature-preview img {
+            max-width: 100%;
+            max-height: 150px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        #saved-signatures-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .saved-signature-item {
+            position: relative;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .saved-signature-item:hover {
+            border-color: #2196F3;
+        }
+
+        .saved-signature-item img {
+            width: 100%;
+            height: 60px;
+            object-fit: contain;
+            display: block;
+        }
+
+        .saved-signature-delete {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #ff6b6b;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .saved-signature-delete:hover {
+            background: #ff4757;
+        }
+
+        #no-saved-signatures {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -232,6 +423,7 @@
                 <button id="add-text-btn" class="btn btn-primary">+ Add Text</button>
                 <button id="add-image-btn" class="btn btn-primary">+ Add Image</button>
                 <input type="file" id="image-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+                <button id="add-signature-btn" class="btn btn-primary">+ Add Signature</button>
             </div>
             <div class="toolbar-center">
                 <button id="prev-page" class="btn btn-icon" disabled>&lt;</button>
@@ -317,6 +509,49 @@
         </div>
     </div>
 
+    <!-- Signature Modal -->
+    <div class="signature-modal" id="signature-modal">
+        <div class="signature-modal-content">
+            <div class="signature-modal-header">
+                <h2>Add Signature</h2>
+                <button class="signature-close-btn" id="signature-close-btn">&times;</button>
+            </div>
+            <div class="signature-tabs">
+                <button class="signature-tab-btn active" data-tab="draw">Draw</button>
+                <button class="signature-tab-btn" data-tab="upload">Upload</button>
+                <button class="signature-tab-btn" data-tab="saved">Saved</button>
+            </div>
+            <div class="signature-tab-content">
+                <!-- Draw tab -->
+                <div class="signature-tab-panel active" id="draw-panel">
+                    <canvas id="signature-canvas"></canvas>
+                    <div class="signature-actions">
+                        <button id="clear-signature" class="btn btn-secondary">Clear</button>
+                        <button id="save-signature" class="btn btn-primary">Save</button>
+                        <button id="use-drawn-signature" class="btn btn-success">Use Signature</button>
+                    </div>
+                </div>
+                <!-- Upload tab -->
+                <div class="signature-tab-panel" id="upload-panel">
+                    <div class="signature-upload-area">
+                        <input type="file" id="signature-upload" accept="image/*">
+                        <p>Select an image file to use as your signature</p>
+                    </div>
+                    <div id="signature-preview"></div>
+                    <div class="signature-actions" id="upload-actions" style="display: none;">
+                        <button id="save-uploaded-signature" class="btn btn-primary">Save</button>
+                        <button id="use-uploaded-signature" class="btn btn-success">Use Signature</button>
+                    </div>
+                </div>
+                <!-- Saved tab -->
+                <div class="signature-tab-panel" id="saved-panel">
+                    <div id="saved-signatures-grid"></div>
+                    <p id="no-saved-signatures" class="hint">No saved signatures yet. Draw or upload a signature and save it for future use.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Preview Modal -->
     <div class="preview-modal" id="preview-modal">
         <div class="preview-header">
@@ -375,6 +610,23 @@
         const previewBtn = document.getElementById('preview-btn');
         const textProperties = document.getElementById('text-properties');
         const imageProperties = document.getElementById('image-properties');
+        const addSignatureBtn = document.getElementById('add-signature-btn');
+
+        // Signature modal elements
+        const signatureModal = document.getElementById('signature-modal');
+        const signatureCloseBtn = document.getElementById('signature-close-btn');
+        const signatureTabBtns = document.querySelectorAll('.signature-tab-btn');
+        const signatureTabPanels = document.querySelectorAll('.signature-tab-panel');
+        const signatureUpload = document.getElementById('signature-upload');
+        const signaturePreview = document.getElementById('signature-preview');
+        const uploadActions = document.getElementById('upload-actions');
+        const savedSignaturesGrid = document.getElementById('saved-signatures-grid');
+        const noSavedSignatures = document.getElementById('no-saved-signatures');
+
+        // Signature state
+        let signatureCanvas = null;
+        let uploadedSignatureDataUrl = null;
+        const SAVED_SIGNATURES_KEY = 'pdf_editor_saved_signatures';
 
         // Preview modal elements
         const previewModal = document.getElementById('preview-modal');
@@ -411,6 +663,7 @@
 
                 // Setup event listeners
                 setupEventListeners();
+                setupSignatureEventListeners();
 
                 console.log('Editor initialized successfully');
             } catch (err) {
@@ -714,12 +967,25 @@
                 propertiesPanel.querySelector('.hint').style.display = 'block';
             });
 
+            // Track when objects are actually modified by user
+            fabricCanvas.on('object:modified', (e) => {
+                if (e.target) {
+                    e.target.wasModified = true;
+                }
+            });
+            fabricCanvas.on('text:changed', (e) => {
+                if (e.target) {
+                    e.target.wasModified = true;
+                }
+            });
+
             // Property changes
             document.getElementById('prop-font-size').addEventListener('change', (e) => {
                 const obj = fabricCanvas.getActiveObject();
                 if (obj) {
                     obj.set('fontSize', parseInt(e.target.value) * scale);
                     obj.pdfFontSize = parseInt(e.target.value);
+                    obj.wasModified = true;
                     fabricCanvas.renderAll();
                 }
             });
@@ -729,6 +995,7 @@
                 if (obj) {
                     obj.set('fontFamily', mapFont(e.target.value));
                     obj.pdfFontName = e.target.value;
+                    obj.wasModified = true;
                     fabricCanvas.renderAll();
                 }
             });
@@ -737,6 +1004,7 @@
                 const obj = fabricCanvas.getActiveObject();
                 if (obj) {
                     obj.set('fill', e.target.value);
+                    obj.wasModified = true;
                     fabricCanvas.renderAll();
                 }
             });
@@ -885,19 +1153,23 @@
         function saveCurrentPageState() {
             const pdfPageHeight = pageData[currentPage]?.height || 792;
 
-            // Save text blocks
+            // Save text blocks - only update if actually modified by user
             const textObjects = fabricCanvas.getObjects('i-text');
             textObjects.forEach(obj => {
                 const blocks = pageTextBlocks[currentPage] || [];
                 const block = blocks.find(b => b.id === obj.blockId);
 
                 if (block) {
-                    block.text = obj.text;
-                    block.x = obj.left / scale;
-                    block.y = pdfPageHeight - (obj.top / scale) - (obj.getScaledHeight() / scale);
-                    block.fontSize = obj.pdfFontSize || Math.round(obj.fontSize / scale);
-                    block.fontName = obj.pdfFontName || 'Helvetica';
-                    block.color = obj.fill;
+                    // Only update positions/properties if the object was actually modified
+                    if (obj.wasModified) {
+                        block.text = obj.text;
+                        block.x = obj.left / scale;
+                        block.y = pdfPageHeight - (obj.top / scale) - (obj.getScaledHeight() / scale);
+                        block.fontSize = obj.pdfFontSize || Math.round(obj.fontSize / scale);
+                        block.fontName = obj.pdfFontName || 'Helvetica';
+                        block.color = obj.fill;
+                        block.wasModified = true;  // Mark in block data too
+                    }
                 }
             });
 
@@ -946,11 +1218,8 @@
                             });
                         }
                     } else if (!block.id.startsWith('new-')) {
-                        if (original && (
-                            block.text !== original.text ||
-                            Math.abs(block.x - original.x) > 1 ||
-                            Math.abs(block.y - original.y) > 1
-                        )) {
+                        // Only include if the block was actually modified by user
+                        if (original && block.wasModified) {
                             operations.push({
                                 type: 'modify',
                                 page: parseInt(pageNum),
@@ -1127,6 +1396,233 @@
                 previewDownloadBtn.disabled = false;
                 previewDownloadBtn.textContent = 'Download PDF';
             }
+        }
+
+        // Signature Functions
+        function openSignatureModal() {
+            signatureModal.classList.add('active');
+            initSignatureCanvas();
+            loadSavedSignatures();
+            // Reset to draw tab
+            switchSignatureTab('draw');
+        }
+
+        function closeSignatureModal() {
+            signatureModal.classList.remove('active');
+            if (signatureCanvas) {
+                signatureCanvas.dispose();
+                signatureCanvas = null;
+            }
+            uploadedSignatureDataUrl = null;
+            signaturePreview.innerHTML = '';
+            uploadActions.style.display = 'none';
+            signatureUpload.value = '';
+        }
+
+        function initSignatureCanvas() {
+            const canvasEl = document.getElementById('signature-canvas');
+            canvasEl.width = 400;
+            canvasEl.height = 150;
+
+            signatureCanvas = new fabric.Canvas('signature-canvas', {
+                isDrawingMode: true,
+                width: 400,
+                height: 150,
+                backgroundColor: '#fff'
+            });
+            signatureCanvas.freeDrawingBrush.width = 2;
+            signatureCanvas.freeDrawingBrush.color = '#000';
+        }
+
+        function clearSignatureCanvas() {
+            if (signatureCanvas) {
+                signatureCanvas.clear();
+                signatureCanvas.backgroundColor = '#fff';
+                signatureCanvas.renderAll();
+            }
+        }
+
+        function switchSignatureTab(tabName) {
+            signatureTabBtns.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tabName);
+            });
+            signatureTabPanels.forEach(panel => {
+                panel.classList.toggle('active', panel.id === tabName + '-panel');
+            });
+        }
+
+        function saveSignatureToStorage(dataUrl) {
+            let signatures = JSON.parse(localStorage.getItem(SAVED_SIGNATURES_KEY) || '[]');
+            signatures.push(dataUrl);
+            localStorage.setItem(SAVED_SIGNATURES_KEY, JSON.stringify(signatures));
+            loadSavedSignatures();
+        }
+
+        function loadSavedSignatures() {
+            const signatures = JSON.parse(localStorage.getItem(SAVED_SIGNATURES_KEY) || '[]');
+            savedSignaturesGrid.innerHTML = '';
+
+            if (signatures.length === 0) {
+                noSavedSignatures.style.display = 'block';
+            } else {
+                noSavedSignatures.style.display = 'none';
+                signatures.forEach((dataUrl, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'saved-signature-item';
+                    item.innerHTML = `
+                        <img src="${dataUrl}" alt="Signature ${index + 1}">
+                        <button class="saved-signature-delete" data-index="${index}">&times;</button>
+                    `;
+                    item.addEventListener('click', (e) => {
+                        if (!e.target.classList.contains('saved-signature-delete')) {
+                            useSignature(dataUrl);
+                        }
+                    });
+                    savedSignaturesGrid.appendChild(item);
+                });
+
+                // Add delete listeners
+                savedSignaturesGrid.querySelectorAll('.saved-signature-delete').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteSignature(parseInt(btn.dataset.index));
+                    });
+                });
+            }
+        }
+
+        function deleteSignature(index) {
+            let signatures = JSON.parse(localStorage.getItem(SAVED_SIGNATURES_KEY) || '[]');
+            signatures.splice(index, 1);
+            localStorage.setItem(SAVED_SIGNATURES_KEY, JSON.stringify(signatures));
+            loadSavedSignatures();
+        }
+
+        function useSignature(dataUrl) {
+            // Create temp image to get dimensions
+            const tempImg = new Image();
+            tempImg.onload = function() {
+                const pdfPageHeight = pageData[currentPage]?.height || 792;
+
+                // Default signature size - scale down if large
+                let width = Math.min(tempImg.width, 150);
+                let height = (width / tempImg.width) * tempImg.height;
+
+                const block = {
+                    id: 'sig-' + Date.now(),
+                    x: 100,
+                    y: pdfPageHeight - 200 - height,
+                    width: width,
+                    height: height,
+                    imageDataUrl: dataUrl,
+                    aspectRatio: tempImg.width / tempImg.height,
+                    isSignature: true
+                };
+
+                if (!pageImageBlocks[currentPage]) {
+                    pageImageBlocks[currentPage] = [];
+                }
+                pageImageBlocks[currentPage].push(block);
+
+                addImageToCanvas(block, pdfPageHeight, pageImageBlocks[currentPage].length - 1);
+                closeSignatureModal();
+                updateDebugInfo();
+            };
+            tempImg.src = dataUrl;
+        }
+
+        function getDrawnSignatureDataUrl() {
+            if (!signatureCanvas || signatureCanvas.getObjects().length === 0) {
+                return null;
+            }
+            return signatureCanvas.toDataURL({
+                format: 'png',
+                multiplier: 2  // Higher resolution
+            });
+        }
+
+        function setupSignatureEventListeners() {
+            // Open signature modal
+            addSignatureBtn.addEventListener('click', openSignatureModal);
+
+            // Close signature modal
+            signatureCloseBtn.addEventListener('click', closeSignatureModal);
+
+            // Close on backdrop click
+            signatureModal.addEventListener('click', (e) => {
+                if (e.target === signatureModal) {
+                    closeSignatureModal();
+                }
+            });
+
+            // Tab switching
+            signatureTabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    switchSignatureTab(btn.dataset.tab);
+                });
+            });
+
+            // Clear signature canvas
+            document.getElementById('clear-signature').addEventListener('click', clearSignatureCanvas);
+
+            // Save drawn signature
+            document.getElementById('save-signature').addEventListener('click', () => {
+                const dataUrl = getDrawnSignatureDataUrl();
+                if (dataUrl) {
+                    saveSignatureToStorage(dataUrl);
+                    alert('Signature saved!');
+                } else {
+                    alert('Please draw a signature first');
+                }
+            });
+
+            // Use drawn signature
+            document.getElementById('use-drawn-signature').addEventListener('click', () => {
+                const dataUrl = getDrawnSignatureDataUrl();
+                if (dataUrl) {
+                    useSignature(dataUrl);
+                } else {
+                    alert('Please draw a signature first');
+                }
+            });
+
+            // Upload signature image
+            signatureUpload.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    const file = e.target.files[0];
+                    if (!file.type.startsWith('image/')) {
+                        alert('Please select a valid image file');
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = function(evt) {
+                        uploadedSignatureDataUrl = evt.target.result;
+                        signaturePreview.innerHTML = `<img src="${uploadedSignatureDataUrl}" alt="Signature preview">`;
+                        uploadActions.style.display = 'flex';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Save uploaded signature
+            document.getElementById('save-uploaded-signature').addEventListener('click', () => {
+                if (uploadedSignatureDataUrl) {
+                    saveSignatureToStorage(uploadedSignatureDataUrl);
+                    alert('Signature saved!');
+                } else {
+                    alert('Please upload an image first');
+                }
+            });
+
+            // Use uploaded signature
+            document.getElementById('use-uploaded-signature').addEventListener('click', () => {
+                if (uploadedSignatureDataUrl) {
+                    useSignature(uploadedSignatureDataUrl);
+                } else {
+                    alert('Please upload an image first');
+                }
+            });
         }
 
         // Start
