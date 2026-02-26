@@ -90,9 +90,31 @@ class PDFService:
             page = doc[page_num]
             page_height = page.rect.height
 
-            # First pass: add images FIRST (before any text operations)
-            # Using overlay=True so images appear on top of existing page content
-            # but will be below any text we insert afterward
+            # First pass: redact modified/deleted text
+            for op in page_ops:
+                if op['type'] in ('modify', 'delete'):
+                    # Get original bounding box
+                    original_bbox = op.get('originalBbox')
+                    if original_bbox:
+                        rect = fitz.Rect(original_bbox)
+                    else:
+                        # Calculate from position
+                        x = op.get('originalX', op.get('x', 0))
+                        y = op.get('originalY', op.get('y', 0))
+                        w = op.get('originalWidth', op.get('width', 100))
+                        h = op.get('originalHeight', op.get('height', 12))
+                        # Convert from PDF coords to fitz coords
+                        top = page_height - y - h
+                        rect = fitz.Rect(x, top, x + w, top + h)
+
+                    # Add redaction with white fill
+                    page.add_redact_annot(rect, fill=(1, 1, 1))
+
+            # Apply all redactions
+            page.apply_redactions()
+
+            # Second pass: add images (after redactions so they're not covered by white fill)
+            # Using overlay=True so images appear on top of existing/redacted content
             for op in page_ops:
                 if op['type'] == 'add_image':
                     x = op.get('x', 0)
@@ -118,33 +140,10 @@ class PDFService:
                     # Decode base64 image data
                     image_data = base64.b64decode(op['imageData'])
 
-                    # Insert image - will appear over existing content but under new text
+                    # Insert image with overlay=True (appears on top of existing content)
                     page.insert_image(rect, stream=image_data, overlay=True)
 
-            # Second pass: redact modified/deleted text
-            for op in page_ops:
-                if op['type'] in ('modify', 'delete'):
-                    # Get original bounding box
-                    original_bbox = op.get('originalBbox')
-                    if original_bbox:
-                        rect = fitz.Rect(original_bbox)
-                    else:
-                        # Calculate from position
-                        x = op.get('originalX', op.get('x', 0))
-                        y = op.get('originalY', op.get('y', 0))
-                        w = op.get('originalWidth', op.get('width', 100))
-                        h = op.get('originalHeight', op.get('height', 12))
-                        # Convert from PDF coords to fitz coords
-                        top = page_height - y - h
-                        rect = fitz.Rect(x, top, x + w, top + h)
-
-                    # Add redaction with white fill
-                    page.add_redact_annot(rect, fill=(1, 1, 1))
-
-            # Apply all redactions
-            page.apply_redactions()
-
-            # Third pass: add new/modified text (after images and redactions)
+            # Third pass: add new/modified text (after images, so text appears on top)
             for op in page_ops:
                 if op['type'] in ('modify', 'add'):
                     text = op.get('newText') if op['type'] == 'modify' else op.get('text', '')
