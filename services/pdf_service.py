@@ -90,7 +90,38 @@ class PDFService:
             page = doc[page_num]
             page_height = page.rect.height
 
-            # First pass: redact modified/deleted text
+            # First pass: add images FIRST (before any text operations)
+            # Using overlay=True so images appear on top of existing page content
+            # but will be below any text we insert afterward
+            for op in page_ops:
+                if op['type'] == 'add_image':
+                    x = op.get('x', 0)
+                    y = op.get('y', 0)
+                    width = op.get('width', 100)
+                    height = op.get('height', 100)
+
+                    # Ensure coordinates are valid numbers
+                    x = float(x) if x is not None else 0
+                    y = float(y) if y is not None else 0
+                    width = float(width) if width is not None else 100
+                    height = float(height) if height is not None else 100
+
+                    # Convert PDF coords (bottom-left origin) to fitz coords (top-left origin)
+                    fitz_y = page_height - y - height
+
+                    # Clamp coordinates to page bounds
+                    x = max(0, min(x, page.rect.width - width))
+                    fitz_y = max(0, min(fitz_y, page_height - height))
+
+                    rect = fitz.Rect(x, fitz_y, x + width, fitz_y + height)
+
+                    # Decode base64 image data
+                    image_data = base64.b64decode(op['imageData'])
+
+                    # Insert image - will appear over existing content but under new text
+                    page.insert_image(rect, stream=image_data, overlay=True)
+
+            # Second pass: redact modified/deleted text
             for op in page_ops:
                 if op['type'] in ('modify', 'delete'):
                     # Get original bounding box
@@ -113,7 +144,7 @@ class PDFService:
             # Apply all redactions
             page.apply_redactions()
 
-            # Second pass: add new/modified text
+            # Third pass: add new/modified text (after images and redactions)
             for op in page_ops:
                 if op['type'] in ('modify', 'add'):
                     text = op.get('newText') if op['type'] == 'modify' else op.get('text', '')
@@ -134,37 +165,6 @@ class PDFService:
                         fontname=font_name,
                         color=color
                     )
-
-            # Third pass: add images
-            for op in page_ops:
-                if op['type'] == 'add_image':
-                    x = op.get('x', 0)
-                    y = op.get('y', 0)
-                    width = op.get('width', 100)
-                    height = op.get('height', 100)
-
-                    # Ensure coordinates are valid numbers
-                    x = float(x) if x is not None else 0
-                    y = float(y) if y is not None else 0
-                    width = float(width) if width is not None else 100
-                    height = float(height) if height is not None else 100
-
-                    # Convert PDF coords (bottom-left origin) to fitz coords (top-left origin)
-                    # PDF y = distance from bottom of page to bottom of image
-                    # Fitz y = distance from top of page to top of image
-                    fitz_y = page_height - y - height
-
-                    # Clamp coordinates to page bounds
-                    x = max(0, min(x, page.rect.width - width))
-                    fitz_y = max(0, min(fitz_y, page_height - height))
-
-                    rect = fitz.Rect(x, fitz_y, x + width, fitz_y + height)
-
-                    # Decode base64 image data
-                    image_data = base64.b64decode(op['imageData'])
-
-                    # Insert image
-                    page.insert_image(rect, stream=image_data)
 
         doc.save(output_path)
         doc.close()
