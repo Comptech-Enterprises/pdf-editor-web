@@ -16,30 +16,35 @@ def allowed_file(filename):
 @api.route('/upload', methods=['POST'])
 def upload_pdf():
     """Upload a PDF file."""
-    if 'file' not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No file selected"}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
 
-    if not allowed_file(file.filename):
-        return jsonify({"error": "Only PDF files are allowed"}), 400
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Only PDF files are allowed"}), 400
 
-    storage = get_storage()
-    file_id, metadata = storage.save_upload(file)
+        storage = get_storage()
+        file_id, metadata = storage.save_upload(file)
 
-    # Get PDF info
-    pdf_path = storage.get_pdf_path(file_id)
-    pdf_info = PDFService.get_pdf_info(pdf_path)
+        # Get PDF info
+        pdf_path = storage.get_pdf_path(file_id)
+        pdf_info = PDFService.get_pdf_info(pdf_path)
 
-    return jsonify({
-        "success": True,
-        "id": file_id,
-        "filename": metadata['original_name'],
-        "pages": pdf_info['pages'],
-        "pageInfo": pdf_info['pageInfo']
-    })
+        return jsonify({
+            "success": True,
+            "id": file_id,
+            "filename": metadata['original_name'],
+            "pages": pdf_info['pages'],
+            "pageInfo": pdf_info['pageInfo']
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
 @api.route('/pdf/<file_id>/text', methods=['GET'])
 def get_text(file_id):
